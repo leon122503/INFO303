@@ -1,0 +1,195 @@
+plugins {
+	id 'java'
+	id 'org.openapi.generator' version '6.4.0'
+}
+
+repositories {
+	mavenCentral()
+}
+
+test {
+	useJUnitPlatform()
+
+	// only run tests if we explicitly run the 'tests' task
+	onlyIf { project.gradle.startParameter.taskNames.contains("test") }
+}
+
+sourceSets {
+
+	generated {
+
+		java {
+			srcDirs = ["build/generated/src/main/java"]
+		}
+
+		dependencies {
+			implementation group: "com.google.code.findbugs", name: "jsr305", version: "3.0.2"
+			implementation group: 'com.fasterxml.jackson.core', name: "jackson-databind", version: "2.16.1"
+			implementation group: "io.swagger", name: "swagger-annotations", version: "1.6.13"
+			implementation group: "javax.annotation", name: "javax.annotation-api", version: "1.3.2"
+		}
+
+		// generated classes need the main dependencies
+		compileClasspath += main.compileClasspath
+	}
+
+	main {
+
+		dependencies {
+			def retrofitVer = "2.9.0"
+			implementation group: "com.squareup.retrofit2", name: "retrofit", version: retrofitVer
+			implementation group: "com.squareup.retrofit2", name: "converter-gson", version: retrofitVer
+
+			def junitVer = "5.10.2"
+			testImplementation group: "org.junit.jupiter", name: "junit-jupiter-api", version: junitVer
+			testRuntimeOnly group: "org.junit.jupiter", name: "junit-jupiter-engine", version: junitVer
+			testImplementation group: "org.hamcrest", name: "hamcrest", version: "2.2"
+		}
+
+		// main needs to be able to see the generated classes
+		compileClasspath += generated.output
+		runtimeClasspath += generated.output
+	}
+
+	test {
+		// tests also need to be able to see the generated classes
+		compileClasspath += generated.output
+		runtimeClasspath += generated.output
+	}
+}
+
+// compiling generated code requires that the generated code is actually generated
+compileGeneratedJava {
+	dependsOn(tasks.openApiGenerate)
+}
+
+openApiGenerate {
+	generatorName = "java"
+	library = "retrofit2"
+	inputSpec = file('src/main/resources/sales.yaml').toString()
+	outputDir = file('build/generated').toString()
+	apiPackage = "api"
+	modelPackage = "domain"
+	invokerPackage = "util"
+	validateSpec = true
+	globalProperties = [
+		apis: "",
+		models: "",
+		modelTests: "false",
+		apiTests: "false",
+		modelDocs: "false",
+		apiDocs: "false,",
+		supportingFiles:"CollectionFormats.java,StringUtil.java"
+	]
+	configOptions = [
+      dateLibrary: "java8",
+	   bigDecimalAsString : "true",
+	   useRuntimeException : "true"
+	]
+}
+
+/* convenience tasks for working with a project */
+
+tasks.register("createMissingSourceDirs") {
+	group = "Project";
+	description = "Create all of the missing source directories for this project.";
+	doFirst {
+		sourceSets.each { def sourceRoot ->
+			sourceRoot.allSource.srcDirTrees.each { def sourceDir ->
+				if(!sourceDir.dir.exists()) {
+					println "Creating ${sourceDir}";
+					mkdir sourceDir.dir;
+				}
+			}
+		}
+	}
+}
+
+tasks.register("deleteEmptySourceDirs") {
+	group = "Project";
+	description = "Delete empty source directories.";
+	doFirst {
+		sourceSets.each { def sourceRoot ->
+			sourceRoot.allSource.srcDirTrees.each { def sourceDir ->
+				if(sourceDir.dir.exists() && sourceDir.dir.isDirectory() && sourceDir.dir.list().length == 0) {
+					println "Removing empty ${sourceDir}";
+					sourceDir.dir.delete();
+				}
+			}
+		}
+	}
+}
+
+tasks.register("openProjectDir") {
+	group = "Project";
+	description = "Open the project directory in the system file manager.";
+	doFirst {
+		println("Opening: " + file(projectDir));
+		java.awt.Desktop.getDesktop().open(file(projectDir));
+	}
+}
+
+tasks.register("openBuildDir") {
+	group = "Project";
+	description = "Open the project build directory in the system file manager.";
+	doFirst {
+		println("Opening: " + file(buildDir));
+		java.awt.Desktop.getDesktop().open(file(buildDir));
+	}
+}
+
+tasks.register("createGitIgnore") {
+	group = "Project";
+	description = "Create the project's .gitignore file.";
+
+	def gitIgnored="""
+        .gradle/
+        .nb-gradle/
+        .settings/
+        nbproject/
+        build/
+        bin/
+        dist/
+        tmp/
+        .classpath
+        .project
+        *.zip
+        *.tgz
+        *.tar.gz
+        *.class
+        *.jar
+        .DS_Store
+        !gradle-wrapper.jar
+        """;
+
+	doLast {
+		def file = new File(projectDir, ".gitignore");
+		if ( !file.exists() ) {
+			println("Creating .gitignore");
+
+			gitIgnored.lines().each { f ->
+				if(!f.trim().isBlank()) {
+					file.append(f.trim()+"\n");
+				}
+			}
+
+		} else {
+			println(".gitignore already exists");
+		}
+	}
+}
+
+tasks.register("info") { 
+	group = "Project";
+	description = "Show version and location information for Java, Gradle, and project.";
+	doLast { 
+		println "Java Version: " + org.gradle.internal.jvm.Jvm.current();
+		println "Java Home: " + org.gradle.internal.jvm.Jvm.current().getJavaHome();
+		println "Gradle Version: ${gradle.gradleVersion}";
+		println "Gradle Home: ${gradle.gradleHomeDir}";
+		println "Gradle User Home: ${gradle.gradleUserHomeDir}";
+		println "Project Location: ${projectDir}";
+		println "Project Build Location: ${buildDir}";
+
+	}
+}
